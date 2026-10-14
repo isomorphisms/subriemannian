@@ -1,0 +1,254 @@
+module Objects
+
+import Data.List
+
+-- The pinned compiler accepts × and ÷, but does not accept Unicode minus as an infix
+-- operator. Executable subtraction retains the accepted ASCII spelling.
+
+-- Exact coefficients. The constructor stays behind this module's operations.
+export
+record RationalNumber where
+  constructor Fraction
+  numerator : Integer
+  denominator : Integer
+
+export
+integer : Integer → RationalNumber
+integer value = Fraction value 1
+
+export
+fraction : Integer → Integer → Maybe RationalNumber
+fraction numerator denominator =
+  if denominator > 0 then Just (Fraction numerator denominator) else Nothing
+
+export
+Eq RationalNumber where
+  (≟) (Fraction a b) (Fraction c d) = a × d ≟ c × b
+
+export
+Show RationalNumber where
+  show (Fraction a b) = show a ++ "/" ++ show b
+
+export
+add_fraction : RationalNumber → RationalNumber → RationalNumber
+add_fraction (Fraction a b) (Fraction c d) = Fraction (a × d + c × b) (b × d)
+
+export
+multiply_fraction : RationalNumber → RationalNumber → RationalNumber
+multiply_fraction (Fraction a b) (Fraction c d) = Fraction (a × c) (b × d)
+
+export
+negate_fraction : RationalNumber → RationalNumber
+negate_fraction (Fraction a b) = Fraction (0 - a) b
+
+export
+subtract_fraction : RationalNumber → RationalNumber → RationalNumber
+subtract_fraction a b = add_fraction a (negate_fraction b)
+
+export
+to_binary64 : RationalNumber → Double
+to_binary64 (Fraction a b) = cast a ÷ cast b
+
+export
+power : RationalNumber → Number → RationalNumber
+power value Z = integer 1
+power value (S remaining) = multiply_fraction value (power value remaining)
+
+public export
+record Exponents where
+  constructor Powers
+  x_power : Number
+  y_power : Number
+  z_power : Number
+
+export
+Eq Exponents where
+  (≟) (Powers a b c) (Powers d e f) = a ≟ d && b ≟ e && c ≟ f
+
+public export
+record Term where
+  constructor Monomial
+  coefficient : RationalNumber
+  exponents : Exponents
+
+public export
+Polynomial : Type
+Polynomial = List Term
+
+export
+insert_term : Term → Polynomial → Polynomial
+insert_term term [] = if term.coefficient ≟ integer 0 then [] else [term]
+insert_term term (existing :: remaining) =
+  if term.exponents ≟ existing.exponents
+    then let combined = add_fraction term.coefficient existing.coefficient in
+      if combined ≟ integer 0 then remaining
+        else Monomial combined existing.exponents :: remaining
+    else existing :: insert_term term remaining
+
+export
+normalize : Polynomial → Polynomial
+normalize = foldl (flip insert_term) []
+
+export
+constant : RationalNumber → Polynomial
+constant value = normalize [Monomial value (Powers 0 0 0)]
+
+export
+add_polynomial : Polynomial → Polynomial → Polynomial
+add_polynomial first second = normalize (first ++ second)
+
+export
+negate_polynomial : Polynomial → Polynomial
+negate_polynomial = map (\term ⇒ Monomial (negate_fraction term.coefficient) term.exponents)
+
+export
+subtract_polynomial : Polynomial → Polynomial → Polynomial
+subtract_polynomial first second = add_polynomial first (negate_polynomial second)
+
+export
+multiply_polynomial : Polynomial → Polynomial → Polynomial
+multiply_polynomial first second = normalize $ concatMap
+  (\left ⇒ map (\right ⇒ Monomial
+    (multiply_fraction left.coefficient right.coefficient)
+    (Powers (left.exponents.x_power + right.exponents.x_power)
+            (left.exponents.y_power + right.exponents.y_power)
+            (left.exponents.z_power + right.exponents.z_power))) second) first
+
+public export
+choice coordinate one_of
+  x_coordinate
+  y_coordinate
+  z_coordinate
+
+export
+differentiate_term : coordinate → Term → Polynomial
+differentiate_term x_coordinate (Monomial coefficient (Powers Z y z)) = []
+differentiate_term x_coordinate (Monomial coefficient (Powers (S x) y z)) =
+  [Monomial (multiply_fraction coefficient (integer (cast (S x)))) (Powers x y z)]
+differentiate_term y_coordinate (Monomial coefficient (Powers x Z z)) = []
+differentiate_term y_coordinate (Monomial coefficient (Powers x (S y) z)) =
+  [Monomial (multiply_fraction coefficient (integer (cast (S y)))) (Powers x y z)]
+differentiate_term z_coordinate (Monomial coefficient (Powers x y Z)) = []
+differentiate_term z_coordinate (Monomial coefficient (Powers x y (S z))) =
+  [Monomial (multiply_fraction coefficient (integer (cast (S z)))) (Powers x y z)]
+
+export
+differentiate : coordinate → Polynomial → Polynomial
+differentiate axis = normalize . concatMap (differentiate_term axis)
+
+public export
+record Point value where
+  constructor At
+  x : value
+  y : value
+  z : value
+
+export
+evaluate : Polynomial → Point RationalNumber → RationalNumber
+evaluate polynomial point = foldl add_fraction (integer 0) $ map
+  (\term ⇒ multiply_fraction term.coefficient
+    (multiply_fraction (power point.x term.exponents.x_power)
+      (multiply_fraction (power point.y term.exponents.y_power)
+                         (power point.z term.exponents.z_power)))) polynomial
+
+export
+evaluate_binary64 : Polynomial → Point Double → Double
+evaluate_binary64 polynomial point = sum $ map
+  (\term ⇒ to_binary64 term.coefficient ×
+    pow point.x (cast term.exponents.x_power) ×
+    pow point.y (cast term.exponents.y_power) ×
+    pow point.z (cast term.exponents.z_power)) polynomial
+
+public export
+record VectorField where
+  constructor Field
+  x_component : Polynomial
+  y_component : Polynomial
+  z_component : Polynomial
+
+export
+directional_derivative : VectorField → Polynomial → Polynomial
+directional_derivative field polynomial = add_polynomial
+  (multiply_polynomial field.x_component (differentiate x_coordinate polynomial))
+  (add_polynomial
+    (multiply_polynomial field.y_component (differentiate y_coordinate polynomial))
+    (multiply_polynomial field.z_component (differentiate z_coordinate polynomial)))
+
+export
+lie_bracket : VectorField → VectorField → VectorField
+lie_bracket first second = Field
+  (subtract_polynomial (directional_derivative first second.x_component)
+                       (directional_derivative second first.x_component))
+  (subtract_polynomial (directional_derivative first second.y_component)
+                       (directional_derivative second first.y_component))
+  (subtract_polynomial (directional_derivative first second.z_component)
+                       (directional_derivative second first.z_component))
+
+export
+evaluate_field : VectorField → Point RationalNumber → Point RationalNumber
+evaluate_field field point = At (evaluate field.x_component point)
+                                (evaluate field.y_component point)
+                                (evaluate field.z_component point)
+
+export
+evaluate_field_binary64 : VectorField → Point Double → Point Double
+evaluate_field_binary64 field point = At (evaluate_binary64 field.x_component point)
+  (evaluate_binary64 field.y_component point) (evaluate_binary64 field.z_component point)
+
+export
+cross : Point RationalNumber → Point RationalNumber → Point RationalNumber
+cross first second = At
+  (subtract_fraction (multiply_fraction first.y second.z) (multiply_fraction first.z second.y))
+  (subtract_fraction (multiply_fraction first.z second.x) (multiply_fraction first.x second.z))
+  (subtract_fraction (multiply_fraction first.x second.y) (multiply_fraction first.y second.x))
+
+export
+dot : Point RationalNumber → Point RationalNumber → RationalNumber
+dot first second = add_fraction (multiply_fraction first.x second.x)
+  (add_fraction (multiply_fraction first.y second.y) (multiply_fraction first.z second.z))
+
+export
+nonzero : Point RationalNumber → Bool
+nonzero point = not (point.x ≟ integer 0 && point.y ≟ integer 0 && point.z ≟ integer 0)
+
+export
+rank : List (Point RationalNumber) → Number
+rank vectors =
+  let pairs = concatMap (\first ⇒ map (cross first) vectors) vectors in
+  if any (\normal ⇒ any (\vector ⇒ not (dot normal vector ≟ integer 0)) vectors) pairs
+    then 3
+    else if any nonzero pairs then 2
+    else if any nonzero vectors then 1 else 0
+
+export
+bracket_flag : List VectorField → Point RationalNumber → Number → List Number
+bracket_flag generators point depth = build depth generators
+  where
+  build : Number → List VectorField → List Number
+  build Z current = []
+  build (S remaining) current = rank (map (\field ⇒ evaluate_field field point) current) ::
+    build remaining (current ++ concatMap (\field ⇒ map (lie_bracket field) current) generators)
+
+export
+heisenberg_fields : RationalNumber → (VectorField, VectorField)
+heisenberg_fields departure =
+  let half = Fraction 1 2 in
+  (Field (constant (integer 1)) [] [Monomial (negate_fraction (multiply_fraction half departure)) (Powers 0 1 0)],
+   Field [] (constant (integer 1)) [Monomial (multiply_fraction half departure) (Powers 1 0 0)])
+
+export
+martinet_fields : (VectorField, VectorField)
+martinet_fields = (Field (constant (integer 1)) [] [Monomial (Fraction 1 2) (Powers 0 2 0)],
+                   Field [] (constant (integer 1)) [])
+
+export
+group_product : Point RationalNumber → Point RationalNumber → Point RationalNumber
+group_product first second = At (add_fraction first.x second.x) (add_fraction first.y second.y)
+  (add_fraction (add_fraction first.z second.z)
+    (multiply_fraction (Fraction 1 2)
+      (subtract_fraction (multiply_fraction first.x second.y) (multiply_fraction first.y second.x))))
+
+export
+dilation : RationalNumber → Point RationalNumber → Point RationalNumber
+dilation scale point = At (multiply_fraction scale point.x) (multiply_fraction scale point.y)
+  (multiply_fraction (multiply_fraction scale scale) point.z)

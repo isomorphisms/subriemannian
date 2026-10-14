@@ -1,0 +1,17 @@
+PASS	exact brackets and flags
+PASS	group law and weighted dilations
+PASS	loop area, orientation, length and gauge
+PASS	loop area, orientation, length and gauge
+PASS	loop area, orientation, length and gauge
+PASS	open gauge change
+PASS	independent geodesic convergence 1.7
+PASS	independent geodesic convergence -1.7
+PASS	reject zero radius
+PASS	reject bad orientation
+PASS	reject overflowing loop
+PASS	reject too few sides
+PASS	reject zero steps
+PASS	reject negative duration
+PASS	reject invalid number
+PASS	reject sign, gauge, nonfinite and empty-output mutants
+PASS	AICI compiled Idriç/Chez artifact execution

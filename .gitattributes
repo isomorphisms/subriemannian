@@ -1,0 +1,3 @@
+*.idric linguist-language=Idris
+figures/heisenberg-loop.html linguist-generated=true
+figures/heisenberg-loop.tsv linguist-generated=true

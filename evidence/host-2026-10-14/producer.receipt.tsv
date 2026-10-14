@@ -1,0 +1,10 @@
+schema	subriemannian-build-v1
+project_head	50eb3ac8b8fa54f20e8ba91b316d7698c98c404f
+compiler_head	2734ac5a86610eddfab73b1644d72b4ac85a65ee
+aici_head	fd4e3a5d051bbebfa5f89a1a45cb6bce4598a82e
+kitchen_head	48800be28e228cf80a25a9f6cdef018ce4e873e6
+backend	Idriç/Chez Linux x86-64
+tests	PASS
+figure_reproduction	PASS
+producer	PASS
+aici_acceptance	SEPARATE_STAGE

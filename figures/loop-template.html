@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>A horizontal loop changes height</title>
+<style>
+body{margin:0;background:#10191f;color:#e5edf1;font:17px system-ui,sans-serif}main{max-width:1080px;margin:auto;padding:24px}h1{font-size:28px}p{max-width:820px;line-height:1.5}.controls{display:flex;gap:24px;flex-wrap:wrap;align-items:center;padding:16px;background:#1b2a33;border-radius:12px}input{width:200px;accent-color:#edbb65}select{font:inherit;padding:5px;background:#e5edf1}svg{width:100%;height:auto;background:#14232b;border-radius:12px;margin-top:18px}output{font-weight:bold;color:#edbb65}.readout{display:flex;gap:28px;flex-wrap:wrap}.note{font-size:14px;color:#adbec8}button{font:inherit;padding:7px;border-radius:5px}.legend{fill:#adbec8;font-size:16px}#area-fill{fill:#edbb65;opacity:.14}#base-path{stroke:#edbb65;fill:none;stroke-width:2}#lift-path{stroke:#75d5ce;fill:none;stroke-width:3}#base-dot{fill:#edbb65}#lift-dot{fill:#75d5ce}
+</style>
+<main><h1>A horizontal loop changes height</h1>
+<p>A counterclockwise walk around the plane lifts upward. Reverse the walk and the height changes sign. Double the loop size and the height change becomes four times as large.</p>
+<div class="controls"><label>Loop size <input id="radius" type="range" min="0.2" max="2" step="0.05" value="1"> <output id="radius-value">1</output></label><label>Orientation <select id="orientation"><option value="1">Counterclockwise</option><option value="-1">Clockwise</option></select></label><label>Travel <input id="travel" type="range" min="0" max="256" step="1" value="256"></label></div>
+<div class="readout"><p>Final height: <output id="height"></output></p><p>Signed polygon area: <output id="area"></output></p><p>Current height: <output id="current-height"></output></p></div>
+<svg viewBox="0 0 1000 560" role="img" aria-label="Planar loop on the left and its horizontal lift on the right">
+<text x="50" y="40" class="legend">Planar projection (x,y)</text><text x="560" y="40" class="legend">Horizontal lift (x,y,z)</text>
+<g stroke="#3d535f" stroke-width="1"><path d="M 40 280 L 450 280 M 320 90 L 320 510 M 540 280 L 950 280 M 770 70 L 770 520"/></g>
+<text x="435" y="270" class="legend">x</text><text x="330" y="105" class="legend">y</text><text x="780" y="85" class="legend">z</text>
+<path id="area-fill"/><path id="base-path"/><path id="lift-path"/><circle id="base-dot" r="5"/><circle id="lift-dot" r="5"/>
+</svg>
+<p class="note">The displayed path has 256 straight planar sides. Each side uses the exact horizontal-segment equation. The two views consume the same samples from the compiled Idriç core; size uses δᵣ(x,y,z)=(rx,ry,r²z), and orientation reversal uses (x,−y,−z). The polygon area differs slightly from πr². Travel reveals existing segments and does not prescribe an independent trajectory.</p>
+<p class="note">α=dz+(y dx−x dy)/2. Source and calculations: <a href="../worked/01-heisenberg.md" style="color:#75d5ce">Heisenberg example</a>.</p>
+<script>
+// Canonical samples are injected by the compiled Figure.idric program.
+const canonical = /* SAMPLES */;
+const byId = id => document.getElementById(id);
+function transformedSamples(radius, orientation) {
+  return canonical.map(([x,y,z]) => [radius*x,orientation*radius*y,orientation*radius*radius*z]);
+}
+function render() {
+  const radius=Number(byId('radius').value), orientation=Number(byId('orientation').value);
+  const count=Number(byId('travel').value), points=transformedSamples(radius,orientation);
+  const base=p=>[320+65*p[0],280-65*p[1]];
+  const lift=p=>[790+48*p[0]+22*p[1],280-17*p[2]-14*p[1]];
+  const path=(data,projection)=>data.map((point,index)=>{const [x,y]=projection(point);return `${index?'L':'M'}${x.toFixed(4)},${y.toFixed(4)}`;}).join(' ');
+  byId('base-path').setAttribute('d',path(points.slice(0,count+1),base));
+  byId('lift-path').setAttribute('d',path(points.slice(0,count+1),lift));
+  byId('area-fill').setAttribute('d',path(points,base)+' Z');
+  for (const [id,projection] of [['base-dot',base],['lift-dot',lift]]) {const [x,y]=projection(points[count]);byId(id).setAttribute('cx',x);byId(id).setAttribute('cy',y);}
+  byId('radius-value').value=radius.toFixed(2);
+  byId('height').value=points.at(-1)[2].toFixed(6);
+  byId('area').value=points.at(-1)[2].toFixed(6);
+  byId('current-height').value=points[count][2].toFixed(6);
+}
+for (const id of ['radius','orientation','travel']) byId(id).addEventListener('input',render);
+render();
+</script></main></html>

@@ -1,0 +1,188 @@
+module Integration
+
+import Objects
+import Data.List
+
+-- Double is used deliberately as the bootstrap runtime's IEEE binary64 type.
+-- It does not redefine Idriç's ordinary source default Float16.
+public export
+record TimedControl where
+  constructor Control
+  x_speed : Double
+  y_speed : Double
+  duration : Double
+
+export
+finite : Double → Bool
+finite value = value ≟ value && abs value <= 1.7976931348623157e308
+
+export
+finite_point : Point Double → Bool
+finite_point point = all finite [point.x, point.y, point.z]
+
+export
+valid_control : TimedControl → Bool
+valid_control control = finite control.x_speed && finite control.y_speed &&
+  finite control.duration && control.duration > 0
+
+export
+horizontal_segment : Double → Point Double → TimedControl → Point Double
+horizontal_segment departure start control =
+  let horizontal_x = control.duration × control.x_speed
+      horizontal_y = control.duration × control.y_speed in
+  At (start.x + horizontal_x) (start.y + horizontal_y)
+     (start.z + departure × (start.x × horizontal_y - start.y × horizontal_x) ÷ 2)
+
+export
+martinet_segment : Point Double → TimedControl → Point Double
+martinet_segment start control =
+  let duration = control.duration
+      vertical_change = control.x_speed ×
+        (start.y × start.y × duration + start.y × control.y_speed × duration × duration +
+         control.y_speed × control.y_speed × duration × duration × duration ÷ 3) ÷ 2 in
+  At (start.x + duration × control.x_speed) (start.y + duration × control.y_speed)
+     (start.z + vertical_change)
+
+export
+horizontal_endpoint : Double → Point Double → List TimedControl → Maybe (Point Double)
+horizontal_endpoint departure start controls =
+  if finite departure && finite start.x && finite start.y && finite start.z && all valid_control controls
+    then let endpoint = foldl (horizontal_segment departure) start controls in
+      if finite_point endpoint then Just endpoint else Nothing
+    else Nothing
+
+export
+path_length : List TimedControl → Maybe Double
+path_length controls = if all valid_control controls
+  then let length = sum (map (\control ⇒ control.duration × sqrt (control.x_speed × control.x_speed +
+                                                        control.y_speed × control.y_speed)) controls) in
+    if finite length then Just length else Nothing
+  else Nothing
+
+export
+circle_vertices : Double → Double → Number → List (Point Double)
+circle_vertices radius orientation subdivisions = map
+  (\index ⇒ let angle = 2 × pi × cast index ÷ cast subdivisions in
+    if index ≟ subdivisions then At 0 0 0
+      else At (radius × (cos angle - 1)) (orientation × radius × sin angle) 0)
+  [0 .. subdivisions]
+
+export
+lift_vertices : Double → List (Point Double) → List (Point Double)
+lift_vertices departure [] = []
+lift_vertices departure (start :: remaining) = start :: go start remaining
+  where
+  go : Point Double → List (Point Double) → List (Point Double)
+  go previous [] = []
+  go previous (vertex :: vertices) =
+    let lifted = horizontal_segment departure previous (Control (vertex.x - previous.x) (vertex.y - previous.y) 1) in
+    lifted :: go lifted vertices
+
+export
+loop_samples : Double → Double → Number → Maybe (List (Point Double))
+loop_samples radius orientation subdivisions =
+  if finite radius && radius > 0 && (orientation ≟ 1 || orientation ≟ -1) && subdivisions >= 3
+    then let samples = lift_vertices 1 (circle_vertices radius orientation subdivisions) in
+      if all finite_point samples then Just samples else Nothing
+    else Nothing
+
+export
+polygon_area : List (Point Double) → Maybe Double
+polygon_area [] = Nothing
+polygon_area (first :: remaining) = go first remaining 0
+  where
+  go : Point Double → List (Point Double) → Double → Maybe Double
+  go previous [] accumulated = if previous.x ≟ first.x && previous.y ≟ first.y
+    then Just accumulated else Nothing
+  go previous (vertex :: vertices) accumulated = go vertex vertices
+    (accumulated + (previous.x × vertex.y - previous.y × vertex.x) ÷ 2)
+
+-- A change of local section φ = strength (x² + xy + 2y).
+export
+section_value : Double → Point Double → Double
+section_value strength point = strength × (point.x × point.x + point.x × point.y + 2 × point.y)
+
+export
+segment_in_section : Double → Double → Point Double → TimedControl → Point Double
+segment_in_section departure strength local_start control =
+  let canonical = horizontal_segment departure local_start control in
+  At canonical.x canonical.y (canonical.z - section_value strength canonical + section_value strength local_start)
+
+public export
+record CotangentState where
+  constructor PhasePoint
+  position : Point Double
+  momentum : Point Double
+
+export
+horizontal_momenta : CotangentState → (Double, Double)
+horizontal_momenta state = (state.momentum.x - state.position.y × state.momentum.z ÷ 2,
+                            state.momentum.y + state.position.x × state.momentum.z ÷ 2)
+
+export
+hamiltonian : CotangentState → Double
+hamiltonian state = let (x_speed, y_speed) = horizontal_momenta state in
+  (x_speed × x_speed + y_speed × y_speed) ÷ 2
+
+export
+hamiltonian_derivative : CotangentState → CotangentState
+hamiltonian_derivative state =
+  let (x_speed, y_speed) = horizontal_momenta state in
+  PhasePoint (At x_speed y_speed ((state.position.x × y_speed - state.position.y × x_speed) ÷ 2))
+    (At (0 - state.momentum.z × y_speed ÷ 2) (state.momentum.z × x_speed ÷ 2) 0)
+
+export
+add_scaled : Double → CotangentState → CotangentState → CotangentState
+add_scaled scale first second = PhasePoint
+  (At (first.position.x + scale × second.position.x)
+      (first.position.y + scale × second.position.y)
+      (first.position.z + scale × second.position.z))
+  (At (first.momentum.x + scale × second.momentum.x)
+      (first.momentum.y + scale × second.momentum.y)
+      (first.momentum.z + scale × second.momentum.z))
+
+export
+rk4_step : Double → CotangentState → CotangentState
+rk4_step step state =
+  let first = hamiltonian_derivative state
+      second = hamiltonian_derivative (add_scaled (step ÷ 2) state first)
+      third = hamiltonian_derivative (add_scaled (step ÷ 2) state second)
+      fourth = hamiltonian_derivative (add_scaled step state third) in
+  add_scaled (step ÷ 6) (add_scaled (step ÷ 3) (add_scaled (step ÷ 3)
+    (add_scaled (step ÷ 6) state first) second) third) fourth
+
+export
+normal_geodesic : CotangentState → Double → Number → Maybe (List CotangentState)
+normal_geodesic start duration steps =
+  if steps > 0 && finite duration && duration > 0 &&
+     all finite [start.position.x, start.position.y, start.position.z,
+                 start.momentum.x, start.momentum.y, start.momentum.z] && finite (hamiltonian start)
+    then let samples = start :: advance steps start (duration ÷ cast steps) in
+      if all (\state ⇒ finite_point state.position && finite_point state.momentum) samples
+        then Just samples else Nothing
+    else Nothing
+  where
+  advance : Number → CotangentState → Double → List CotangentState
+  advance Z state step = []
+  advance (S remaining) state step = let next = rk4_step step state in next :: advance remaining next step
+
+-- Closed form from the origin, used as a separately evaluated convergence target.
+export
+normal_endpoint_from_origin : Double → Double → Double → Double → Point Double
+normal_endpoint_from_origin x_speed y_speed vertical_momentum duration =
+  if vertical_momentum ≟ 0 then At (x_speed × duration) (y_speed × duration) 0
+  else let angle = vertical_momentum × duration
+           squared = angle × angle
+           -- These removable singularities use their series near zero.
+           sine_ratio = if abs angle < 0.0001
+             then 1 - squared ÷ 6 + squared × squared ÷ 120 - squared × squared × squared ÷ 5040
+             else sin angle ÷ angle
+           cosine_ratio = if abs angle < 0.0001
+             then 0.5 - squared ÷ 24 + squared × squared ÷ 720 - squared × squared × squared ÷ 40320
+             else (1 - cos angle) ÷ squared
+           area_ratio = if abs angle < 0.0001
+             then angle ÷ 12 - angle × squared ÷ 240 + angle × squared × squared ÷ 10080
+             else (angle - sin angle) ÷ (2 × squared) in
+    At (duration × (x_speed × sine_ratio - y_speed × angle × cosine_ratio))
+       (duration × (x_speed × angle × cosine_ratio + y_speed × sine_ratio))
+       ((x_speed × x_speed + y_speed × y_speed) × duration × duration × area_ratio)

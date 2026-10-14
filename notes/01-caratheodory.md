@@ -4,7 +4,13 @@
 
 Constantin Carathéodory, “Untersuchungen über die Grundlagen der Thermodynamik,” *Mathematische Annalen* **67** (1909), 355–386, DOI [10.1007/BF01450409](https://doi.org/10.1007/BF01450409).
 
-The working text for these notes is D. H. Delphenich’s [English translation](https://neo-classical-physics.info/uploads/3/0/6/5/3065888/caratheodory_-_thermodynamics.pdf). Terminology and equation numbering should be checked against the German original before making historical claims that depend on exact wording.
+The working translation is D. H. Delphenich’s [English translation](https://neo-classical-physics.info/uploads/3/0/6/5/3065888/caratheodory_-_thermodynamics.pdf).
+The executable-geometry review checked §3 and §4 against the
+[German original scan](https://academicweb.nd.edu/~powers/ame.20231/caratheodory1909.pdf):
+§3, pp.367–369, describes simple systems and quasistatic reversibility; §4,
+pp.369–370, gives equations (16)–(17) and the local Pfaffian multiplier argument.
+Other historical wording remains subject to the boundaries in the
+[source ledger](../sources/ledger.md).
 
 ## What problem Carathéodory is solving
 

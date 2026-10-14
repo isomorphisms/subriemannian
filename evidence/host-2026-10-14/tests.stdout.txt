@@ -1,0 +1,40 @@
+PASS	generic polynomial Jacobi identity
+PASS	heisenberg bracket exact
+PASS	bracket antisymmetry
+PASS	central next bracket
+PASS	self bracket vanishes
+PASS	Martinet depth three
+PASS	Heisenberg flag
+PASS	Martinet surface flag
+PASS	Martinet off surface flag
+PASS	zero denominator rejected
+PASS	gauge curvature unchanged
+PASS	dilation group automorphism
+PASS	dilation X weight one
+PASS	dilation Y weight one
+PASS	group inverse
+PASS	group associativity
+PASS	parameter flag 0/1
+PASS	parameter flag 1/1
+PASS	parameter flag -1/1
+PASS	parameter flag 1/1000000000000
+PASS	horizontal segment constraint
+PASS	translated square area
+PASS	orientation reversal
+PASS	integrable loop no vertical motion
+PASS	Martinet exact segment integral
+PASS	Martinet abnormal backtracking is longer with same endpoints
+PASS	open path gauge must change coordinate
+PASS	closed gauge loop invariant
+PASS	invalid control rejected
+PASS	open polygon area rejected
+PASS	invalid loop orientation rejected
+PASS	zero subdivisions rejected
+PASS	overflowing loop rejected
+PASS	RK4 convergence and H conservation 1.7
+PASS	RK4 convergence and H conservation -1.7
+PASS	zero curvature straight line
+PASS	zero steps rejected
+PASS	near zero curvature stable
+PASS	nonorigin Hamiltonian lift
+PASS	tests=39
