@@ -1,0 +1,10 @@
+module Subriemannian
+
+-- The field slopes are doubled, so the coefficients remain exact integers.
+-- [X,Y]^z = ∂x Y^z − ∂y X^z. The expected doubled answer is 2.
+heisenberg_vertical_bracket_twice : Integer → Integer → Integer
+heisenberg_vertical_bracket_twice x_vertical_y_slope_twice y_vertical_x_slope_twice =
+  y_vertical_x_slope_twice − x_vertical_y_slope_twice
+
+main : IO ()
+main = printLn (heisenberg_vertical_bracket_twice (-1) 1)

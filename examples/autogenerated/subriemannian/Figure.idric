@@ -1,0 +1,73 @@
+module Figure
+
+import Objects
+import Integration
+import Data.List
+import Data.Text
+import System
+import System.File
+
+sample_json : Point Double → Text
+sample_json point = "[" ++ show point.x ++ "," ++ show point.y ++ "," ++ show point.z ++ "]"
+
+sample_tsv : Point Double → Text
+sample_tsv point = show point.x ++ "\t" ++ show point.y ++ "\t" ++ show point.z ++ "\n"
+
+svg_path : (Point Double → (Double,Double)) → List (Point Double) → Text
+svg_path projection [] = ""
+svg_path projection (first :: rest) =
+  let (first_x,first_y) = projection first in
+  "M " ++ show first_x ++ " " ++ show first_y ++ concat (map
+    (\point ⇒ let (x,y) = projection point in " L " ++ show x ++ " " ++ show y) rest)
+
+svg_figure : List (Point Double) → Text
+svg_figure samples =
+  let base = \point ⇒ (320 + 65 × point.x,280 - 65 × point.y)
+      lift = \point ⇒ (790 + 48 × point.x + 22 × point.y,280 - 17 × point.z - 14 × point.y) in
+  "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1000\" height=\"560\" viewBox=\"0 0 1000 560\">" ++
+  "<rect width=\"1000\" height=\"560\" fill=\"#14232b\"/>" ++
+  "<g fill=\"#e5edf1\" font-family=\"sans-serif\" font-size=\"21\"><text x=\"50\" y=\"40\">Planar projection</text>" ++
+  "<text x=\"560\" y=\"40\">Horizontal lift: same path</text>" ++
+  "<text x=\"50\" y=\"530\">Counterclockwise unit-radius polygon: height = signed area</text></g>" ++
+  "<g stroke=\"#3d535f\" fill=\"none\"><path d=\"M40 280H450 M320 90V510 M540 280H950 M770 70V510\"/></g>" ++
+  "<path stroke=\"#edbb65\" stroke-width=\"3\" fill=\"none\" d=\"" ++ svg_path base samples ++ "\"/>" ++
+  "<path stroke=\"#75d5ce\" stroke-width=\"3\" fill=\"none\" d=\"" ++ svg_path lift samples ++ "\"/></svg>\n"
+
+-- A fixed marker is replaced once, without interpreting a general template language.
+inject : List Text → Text → Text
+inject [] samples = ""
+inject (line :: remaining) samples =
+  (if isInfixOf "const canonical = /* SAMPLES */;" line
+     then "const canonical = " ++ samples ++ ";" else line) ++ "\n" ++ inject remaining samples
+
+write_checked : Text → Text → IO ()
+write_checked path contents = do
+  result ← writeFile path contents
+  case result of
+    Left error ⇒ die ("cannot write " ++ path ++ ": " ++ show error)
+    Right () ⇒ pure ()
+
+-- Reading an external file is allowed to wait indefinitely; pure geometry stays total.
+covering
+run : List Text → IO ()
+run [template_path, output_path, samples_path] = do
+  template ← readFile template_path
+  case (template, loop_samples 1 1 256) of
+    (Right contents, Just samples) ⇒ do
+      let marker_count = length (filter (isInfixOf "const canonical = /* SAMPLES */;") (lines contents))
+      if not (marker_count ≟ 1) then die "figure template must contain exactly one sample marker" else pure ()
+      write_checked output_path (inject (lines contents) ("[" ++ concat (intersperse "," (map sample_json samples)) ++ "]"))
+      write_checked samples_path ("x\ty\tz\n" ++ concat (map sample_tsv samples))
+      let svg_output = pack (reverse (drop 5 (reverse (unpack output_path)))) ++ ".svg"
+      if isSuffixOf ".html" output_path then write_checked svg_output (svg_figure samples)
+        else die "figure output must end with .html"
+      putStrLn "PASS\tfigure regenerated from compiled loop samples"
+    (Left error, _) ⇒ die ("cannot read template: " ++ show error)
+    _ ⇒ die "canonical loop generation failed"
+run _ = die "usage: figure TEMPLATE OUTPUT_HTML OUTPUT_TSV"
+
+covering
+main : IO ()
+main = do
+  arguments ← getArgs
+  run (drop 1 arguments)

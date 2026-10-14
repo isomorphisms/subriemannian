@@ -1,0 +1,123 @@
+module Main
+
+import Objects
+import Integration
+import Data.List
+import Data.Text
+import System
+
+point_values : Point Double → Text
+point_values point = show point.x ++ "\t" ++ show point.y ++ "\t" ++ show point.z
+
+exact_values : Point RationalNumber → Text
+exact_values point = show point.x ++ "\t" ++ show point.y ++ "\t" ++ show point.z
+
+last_point : List (Point Double) → Point Double
+last_point = foldl (\previous, current ⇒ current) (At 0 0 0)
+
+last_state : CotangentState → List CotangentState → CotangentState
+last_state = foldl (\previous, current ⇒ current)
+
+origin : Point RationalNumber
+origin = At (integer 0) (integer 0) (integer 0)
+
+report_models : IO ()
+report_models = do
+  let (horizontal_x, horizontal_y) = heisenberg_fields (integer 1)
+      (martinet_x, martinet_y) = martinet_fields
+      off_surface = At (integer 2) (integer 1) (integer 3)
+      vertical = lie_bracket horizontal_x horizontal_y
+  putStrLn ("heisenberg_bracket\t" ++ exact_values (evaluate_field vertical off_surface))
+  putStrLn ("heisenberg_flag\t" ++ show (bracket_flag [horizontal_x, horizontal_y] origin 2))
+  let (leaf_x, leaf_y) = heisenberg_fields (integer 0)
+  putStrLn ("integrable_flag\t" ++ show (bracket_flag [leaf_x, leaf_y] origin 3))
+  putStrLn ("martinet_surface_flag\t" ++ show (bracket_flag [martinet_x, martinet_y] origin 3))
+  putStrLn ("martinet_off_surface_flag\t" ++ show (bracket_flag [martinet_x, martinet_y] off_surface 2))
+  putStrLn ("martinet_bracket\t" ++ exact_values (evaluate_field (lie_bracket martinet_x martinet_y) off_surface))
+  putStrLn ("martinet_next_bracket\t" ++ exact_values
+    (evaluate_field (lie_bracket martinet_y (lie_bracket martinet_x martinet_y)) origin))
+
+report_algebra : IO ()
+report_algebra = do
+  let first = At (integer 2) (integer (-3)) (integer 4)
+      second = At (integer (-5)) (integer 7) (integer (-2))
+      scale = integer 3
+  putStrLn ("product\t" ++ exact_values (group_product first second))
+  putStrLn ("dilated_product\t" ++ exact_values (dilation scale (group_product first second)))
+  putStrLn ("product_of_dilations\t" ++ exact_values (group_product (dilation scale first) (dilation scale second)))
+  let (horizontal_x, horizontal_y) = heisenberg_fields (integer 1)
+      derivative = \field ⇒ let value = evaluate_field field first in
+        At (multiply_fraction scale value.x) (multiply_fraction scale value.y)
+           (multiply_fraction (multiply_fraction scale scale) value.z)
+  putStrLn ("dilated_X\t" ++ exact_values (derivative horizontal_x))
+  putStrLn ("dilated_Y\t" ++ exact_values (derivative horizontal_y))
+
+report_loop : Double → Double → Number → Double → IO ()
+report_loop radius orientation subdivisions section_strength = case loop_samples radius orientation subdivisions of
+  Nothing ⇒ die "invalid loop: positive finite radius, orientation ±1, and at least 3 subdivisions required"
+  Just samples ⇒ do
+    let endpoint = last_point samples
+    putStrLn ("endpoint\t" ++ point_values endpoint)
+    case polygon_area samples of
+      Nothing ⇒ die "loop failed closure"
+      Just area ⇒ putStrLn ("signed_area\t" ++ show area)
+    let controls = controls_between (circle_vertices radius orientation subdivisions)
+        local_endpoint = foldl (segment_in_section 1 section_strength) (At 0 0 0) controls
+    if finite_point local_endpoint then pure () else die "gauge calculation overflowed"
+    putStrLn ("gauge_endpoint\t" ++ point_values local_endpoint)
+    case path_length controls of
+      Nothing ⇒ die "invalid controls"
+      Just length ⇒ putStrLn ("length\t" ++ show length)
+  where
+  controls_between : List (Point Double) → List TimedControl
+  controls_between (first :: second :: remaining) =
+    Control (second.x - first.x) (second.y - first.y) 1 :: controls_between (second :: remaining)
+  controls_between _ = []
+
+report_geodesic : Double → Double → Double → Double → Number → IO ()
+report_geodesic initial_x_speed initial_y_speed vertical_momentum duration steps =
+  let start = PhasePoint (At 0 0 0) (At initial_x_speed initial_y_speed vertical_momentum) in
+  case normal_geodesic start duration steps of
+    Nothing ⇒ die "invalid geodesic: finite data, positive duration, and positive step count required"
+    Just samples ⇒ do
+      let endpoint = last_state start samples
+          exact = normal_endpoint_from_origin initial_x_speed initial_y_speed vertical_momentum duration
+          errors = [abs (endpoint.position.x - exact.x), abs (endpoint.position.y - exact.y),
+                    abs (endpoint.position.z - exact.z)]
+          conservation = foldl max 0 (map (\state ⇒ abs (hamiltonian state - hamiltonian start)) samples)
+      putStrLn ("endpoint\t" ++ point_values endpoint.position)
+      putStrLn ("momentum\t" ++ point_values endpoint.momentum)
+      putStrLn ("exact_endpoint\t" ++ point_values exact)
+      putStrLn ("endpoint_error\t" ++ show (foldl max 0 errors))
+      putStrLn ("hamiltonian_drift\t" ++ show conservation)
+      putStrLn ("hamiltonian_initial\t" ++ show (hamiltonian start))
+      putStrLn ("length\t" ++ show (sqrt (2 × hamiltonian start) × duration))
+      traverse_ (\state ⇒ putStrLn ("sample\t" ++ point_values state.position ++ "\t" ++ point_values state.momentum)) samples
+
+run : List Text → IO ()
+run ["models"] = report_models
+run ["algebra"] = report_algebra
+run ["segment", gauge] = case parseDouble gauge of
+  Just strength ⇒ if finite strength
+    then putStrLn ("gauge_endpoint\t" ++ point_values (segment_in_section 1 strength (At 0 0 0) (Control 1 1 1)))
+    else die "invalid gauge"
+  Nothing ⇒ die "invalid gauge"
+run ["loop", radius, orientation, count, gauge] =
+  case (parseDouble radius, parseDouble orientation, parsePositive {a=Number} count, parseDouble gauge) of
+    (Just radius, Just orientation, Just count, Just gauge) ⇒
+      if count <= 100000 && finite gauge then report_loop radius orientation count gauge
+        else die "loop count or gauge is outside the supported range"
+    _ ⇒ die "invalid loop arguments"
+run ["geodesic", x_speed, y_speed, vertical, duration, count] =
+  case (parseDouble x_speed, parseDouble y_speed, parseDouble vertical, parseDouble duration,
+        parsePositive {a=Number} count) of
+    (Just x_speed, Just y_speed, Just vertical, Just duration, Just count) ⇒
+      if count <= 100000 then report_geodesic x_speed y_speed vertical duration count
+        else die "geodesic count is outside the supported range"
+    _ ⇒ die "invalid geodesic arguments"
+run _ = die "usage: subriemannian models | loop RADIUS ORIENTATION COUNT GAUGE | geodesic PX PY PZ DURATION COUNT"
+
+main : IO ()
+main = do
+  arguments ← getArgs
+  run (drop 1 arguments)

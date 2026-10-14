@@ -96,7 +96,7 @@ X=\partial_x-\frac{y}{2}\partial_z,
 Y=\partial_y+\frac{x}{2}\partial_z,
 $$
 
-up to sign convention. Their bracket is
+with exactly the sign convention of the form above. Their bracket is
 
 $$
 [X,Y]=\partial_z.
@@ -110,7 +110,16 @@ $$
 \dot z=\frac12(x\dot y-y\dot x),
 $$
 
-so vertical displacement equals signed planar area. Minimizing horizontal length with fixed vertical displacement becomes the classical planar isoperimetric problem. The planar projections of Heisenberg geodesics are circles or straight lines.
+For a closed planar projection, vertical displacement equals its signed area
+(with winding multiplicity if the projection crosses itself). An open path gives
+the displayed line integral; enclosed area then requires a declared closing path.
+Minimizing horizontal length between vertically separated endpoints becomes the
+planar isoperimetric problem. Normal extremals project to circles or straight
+lines, but arbitrary long circular arcs need not remain minimizing.
+
+The full endpoint and Hamiltonian calculations, using these exact signs, are in
+[`worked/01-heisenberg.md`](../worked/01-heisenberg.md). The source ledger pins
+the inspected preliminary book chapter and author-hosted survey separately.
 
 This example unifies:
 
@@ -215,7 +224,14 @@ $$
 dz-y^2\,dx=0.
 $$
 
-It is contact away from the plane $y=0$ and has growth vector $(2,2,3)$ on that plane. The singular curves lie in $y=0$ and run parallel to the $x$-axis. Short subarcs are minimizing for any metric on the distribution, and for generic metrics they are strictly abnormal.
+It is contact away from the plane $y=0$ and has growth vector $(2,2,3)$ on that
+plane. Singular curves lie in $y=0$ and run parallel to the $x$-axis.
+Montgomery's survey, §3.4, Theorem 5 (preprint p.12), gives a
+sufficiently-short-subarc minimization theorem for smooth metrics and generic
+strict abnormality. That local theorem does not say arbitrary backtracking
+singular paths minimize. For our flat metric, constant-speed straight minimizers
+admit both normal and abnormal lifts; [`worked/03-martinet.md`](../worked/03-martinet.md)
+calculates the endpoint differential and an explicit nonminimizing abnormal path.
 
 The example matters because it defeats the tempting claim that all minimizers arise from the normal Hamiltonian system. It also shows why equiregularity is not a harmless technical assumption: the growth vector changes on the Martinet surface.
 
@@ -254,7 +270,10 @@ The book uses sub-Riemannian geometry as a meeting place for:
 - singularity theory of the endpoint map;
 - open problems around Sard properties and regularity.
 
-This breadth is not decorative. A recurring message is that a horizontal distribution can be read simultaneously as a mechanical constraint, a control system, a connection, and a metric structure.
+Suitable examples connect mechanical constraints, control, bundle connections,
+and metric structures. A general distribution is not automatically a principal
+connection; the bundle/action/complement conditions are checked in
+[`worked/04-connection-and-gauge.md`](../worked/04-connection-and-gauge.md).
 
 ## First-pass reading order
 

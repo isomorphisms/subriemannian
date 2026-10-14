@@ -1,0 +1,165 @@
+module Tests
+
+import Objects
+import Integration
+import Data.List
+import Data.Text
+import System
+
+same_point : Point RationalNumber → Point RationalNumber → Bool
+same_point a b = a.x ≟ b.x && a.y ≟ b.y && a.z ≟ b.z
+
+close : Double → Double → Bool
+close a b = abs (a - b) < 1.0e-10
+
+near_point : Point Double → Point Double → Bool
+near_point a b = close a.x b.x && close a.y b.y && close a.z b.z
+
+add_fields : VectorField → VectorField → VectorField
+add_fields first second = Field (add_polynomial first.x_component second.x_component)
+  (add_polynomial first.y_component second.y_component) (add_polynomial first.z_component second.z_component)
+
+jacobi_check : Bool
+jacobi_check =
+  let first = Field [Monomial (integer 1) (Powers 0 1 0)] [] []
+      second = Field [] [Monomial (integer 1) (Powers 0 0 1)] []
+      third = Field [] [] [Monomial (integer 1) (Powers 1 0 0)]
+      sum = add_fields (lie_bracket first (lie_bracket second third))
+        (add_fields (lie_bracket second (lie_bracket third first)) (lie_bracket third (lie_bracket first second))) in
+  null (normalize sum.x_component) && null (normalize sum.y_component) && null (normalize sum.z_component)
+
+origin : Point RationalNumber
+origin = At (integer 0) (integer 0) (integer 0)
+
+bracket_checks : List (Text, Bool)
+bracket_checks =
+  let (horizontal_x, horizontal_y) = heisenberg_fields (integer 1)
+      (martinet_x, martinet_y) = martinet_fields
+      point = At (integer 2) (integer (-3)) (integer 7)
+      bracket = lie_bracket horizontal_x horizontal_y
+      reverse = lie_bracket horizontal_y horizontal_x
+      next = lie_bracket martinet_y (lie_bracket martinet_x martinet_y)
+      zero = At (integer 0) (integer 0) (integer 0) in
+  [("generic polynomial Jacobi identity", jacobi_check),
+   ("heisenberg bracket exact", same_point (evaluate_field bracket point) (At (integer 0) (integer 0) (integer 1))),
+   ("bracket antisymmetry", same_point (evaluate_field reverse point) (At (integer 0) (integer 0) (integer (-1)))),
+   ("central next bracket", same_point (evaluate_field (lie_bracket horizontal_x bracket) point) zero),
+   ("self bracket vanishes", same_point (evaluate_field (lie_bracket horizontal_x horizontal_x) point) zero),
+   ("Martinet depth three", same_point (evaluate_field next origin) (At (integer 0) (integer 0) (integer (-1)))),
+   ("Heisenberg flag", bracket_flag [horizontal_x, horizontal_y] origin 2 ≟ [2,3]),
+   ("Martinet surface flag", bracket_flag [martinet_x, martinet_y] origin 3 ≟ [2,2,3]),
+   ("Martinet off surface flag", bracket_flag [martinet_x, martinet_y] point 2 ≟ [2,3]),
+   ("zero denominator rejected", case fraction 1 0 of Nothing ⇒ True; _ ⇒ False),
+   ("gauge curvature unchanged", let
+      section = [Monomial (integer 3) (Powers 2 0 0), Monomial (integer 3) (Powers 1 1 0),
+                 Monomial (integer 6) (Powers 0 1 0)]
+      mixed = subtract_polynomial (differentiate x_coordinate (differentiate y_coordinate section))
+                                  (differentiate y_coordinate (differentiate x_coordinate section)) in
+      null mixed)]
+
+dilation_checks : List (Text, Bool)
+dilation_checks =
+  let first = At (integer 2) (integer (-3)) (integer 4)
+      second = At (integer (-5)) (integer 7) (integer (-2))
+      scale = integer 3
+      (horizontal_x, horizontal_y) = heisenberg_fields (integer 1)
+      image = dilation scale first
+      derivative = \field ⇒ let value = evaluate_field field first in
+        At (multiply_fraction scale value.x) (multiply_fraction scale value.y)
+           (multiply_fraction (multiply_fraction scale scale) value.z)
+      weighted = \field ⇒ let value = evaluate_field field image in
+        At (multiply_fraction scale value.x) (multiply_fraction scale value.y) (multiply_fraction scale value.z) in
+  [("dilation group automorphism", same_point (dilation scale (group_product first second))
+     (group_product (dilation scale first) (dilation scale second))),
+   ("dilation X weight one", same_point (derivative horizontal_x) (weighted horizontal_x)),
+   ("dilation Y weight one", same_point (derivative horizontal_y) (weighted horizontal_y)),
+   ("group inverse", same_point (group_product first (At (integer (-2)) (integer 3) (integer (-4)))) origin),
+   ("group associativity", same_point (group_product (group_product first second) first)
+                                  (group_product first (group_product second first)))]
+
+parameter_checks : List (Text, Bool)
+parameter_checks = map check [integer 0, integer 1, integer (-1), small_nonzero]
+  where
+  small_nonzero : RationalNumber
+  small_nonzero = case fraction 1 1000000000000 of Just value ⇒ value; Nothing ⇒ integer 1
+  check : RationalNumber → (Text, Bool)
+  check departure = let (horizontal_x, horizontal_y) = heisenberg_fields departure in
+    ("parameter flag " ++ show departure,
+     bracket_flag [horizontal_x, horizontal_y] origin 3 ≟
+       (if departure ≟ integer 0 then [2,2,2] else [2,3,3]))
+
+path_checks : List (Text, Bool)
+path_checks =
+  let start = At 2 (-3) 4
+      square = [Control 1 0 1, Control 0 1 1, Control (-1) 0 1, Control 0 (-1) 1]
+      reverse = [Control 0 1 1, Control 1 0 1, Control 0 (-1) 1, Control (-1) 0 1]
+      lifted = horizontal_segment 1 start (Control 3 2 0.5)
+      martinet = martinet_segment (At 0 1 0) (Control 2 3 2)
+      monotone = [Control 1 0 1]
+      backtrack = [Control 1 0 2, Control (-1) 0 1]
+      gauge_open = segment_in_section 1 3 (At 0 0 0) (Control 1 1 1)
+      gauged_loop = foldl (segment_in_section 1 7) (At 0 0 0) square in
+  [("horizontal segment constraint", close (lifted.z - start.z)
+       ((start.x × (lifted.y - start.y) - start.y × (lifted.x - start.x)) ÷ 2)),
+   ("translated square area", case horizontal_endpoint 1 start square of
+       Just point ⇒ near_point point (At 2 (-3) 5); _ ⇒ False),
+   ("orientation reversal", case horizontal_endpoint 1 (At 0 0 0) reverse of
+       Just point ⇒ near_point point (At 0 0 (-1)); _ ⇒ False),
+   ("integrable loop no vertical motion", case horizontal_endpoint 0 start square of
+       Just point ⇒ near_point point start; _ ⇒ False),
+   ("Martinet exact segment integral", near_point martinet (At 4 7 38)),
+   ("Martinet abnormal backtracking is longer with same endpoints",
+     near_point (foldl martinet_segment (At 0 0 0) monotone) (At 1 0 0) &&
+     near_point (foldl martinet_segment (At 0 0 0) backtrack) (At 1 0 0) &&
+     path_length monotone ≟ Just 1 && path_length backtrack ≟ Just 3),
+   ("open path gauge must change coordinate", near_point gauge_open (At 1 1 (-12))),
+   ("closed gauge loop invariant", near_point gauged_loop (At 0 0 1)),
+   ("invalid control rejected", case path_length [Control 1 0 (-1)] of Nothing ⇒ True; _ ⇒ False),
+   ("open polygon area rejected", case polygon_area [At 0 0 0, At 1 0 0, At 1 1 0] of Nothing ⇒ True; _ ⇒ False),
+   ("invalid loop orientation rejected", case loop_samples 1 0 64 of Nothing ⇒ True; _ ⇒ False),
+   ("zero subdivisions rejected", case loop_samples 1 1 0 of Nothing ⇒ True; _ ⇒ False),
+   ("overflowing loop rejected", case loop_samples 1.0e200 1 64 of Nothing ⇒ True; _ ⇒ False)]
+
+geodesic_check : Number → Double → Maybe (Double, Double)
+geodesic_check steps vertical =
+  let start = PhasePoint (At 0 0 0) (At 1 0.3 vertical)
+      target = normal_endpoint_from_origin 1 0.3 vertical 2.3 in
+  case normal_geodesic start 2.3 steps of
+    Nothing ⇒ Nothing
+    Just samples ⇒ let finish = foldl (\previous, current ⇒ current) start samples
+                       error = foldl max 0 [abs (finish.position.x - target.x),
+                         abs (finish.position.y - target.y), abs (finish.position.z - target.z)]
+                       drift = foldl max 0 (map (\state ⇒ abs (hamiltonian state - hamiltonian start)) samples) in
+      Just (error, drift)
+
+geodesic_checks : List (Text, Bool)
+geodesic_checks = map check [1.7, -1.7] ++
+   [("zero curvature straight line", case normal_geodesic (PhasePoint (At 0 0 0) (At 2 (-1) 0)) 3 8 of
+      Just samples ⇒ near_point (foldl (\previous, current ⇒ current.position) (At 0 0 0) samples) (At 6 (-3) 0)
+      _ ⇒ False),
+   ("zero steps rejected", case normal_geodesic (PhasePoint (At 0 0 0) (At 1 0 1)) 1 0 of
+      Nothing ⇒ True; _ ⇒ False),
+   ("near zero curvature stable", let endpoint = normal_endpoint_from_origin 1 0 1.0e-9 2 in
+      abs (endpoint.x - 2) < 1.0e-12 && abs (endpoint.y - 2.0e-9) < 1.0e-20 &&
+      abs (endpoint.z - 6.666666666666667e-10) < 1.0e-20),
+   ("nonorigin Hamiltonian lift", let start = PhasePoint (At 3 (-2) 4) (At 0.3 (-0.4) 0.7)
+                                      local = normal_endpoint_from_origin 1 0.65 0.7 1.2
+                                      target = At (3 + local.x) (-2 + local.y)
+                                        (4 + local.z + (3 × local.y + 2 × local.x) ÷ 2) in
+      case normal_geodesic start 1.2 128 of
+        Just samples ⇒ let finish = foldl (\previous, current ⇒ current) start samples in
+          near_point finish.position target
+        _ ⇒ False)]
+  where
+  check : Double → (Text, Bool)
+  check vertical = ("RK4 convergence and H conservation " ++ show vertical,
+    case (geodesic_check 16 vertical, geodesic_check 32 vertical, geodesic_check 64 vertical) of
+      (Just (coarse, _), Just (medium, _), Just (fine, drift)) ⇒
+        coarse > 10 × medium && medium > 10 × fine && fine < 1.0e-6 && drift < 1.0e-7
+      _ ⇒ False)
+
+main : IO ()
+main = do
+  let checks = bracket_checks ++ dilation_checks ++ parameter_checks ++ path_checks ++ geodesic_checks
+  traverse_ (\(name, result) ⇒ putStrLn ((if result then "PASS\t" else "FAIL\t") ++ name)) checks
+  if all snd checks then putStrLn ("PASS\ttests=" ++ show (length checks)) else die "mathematical test failed"
