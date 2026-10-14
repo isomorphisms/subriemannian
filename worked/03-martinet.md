@@ -25,7 +25,8 @@ is not equiregular across that surface.
 dω = y dx∧dy and ω∧dω = y dx∧dy∧dz. The contact condition fails exactly on
 y=0. The depth-three bracket explains why that failure does not mean an
 integrable neighborhood. Tests evaluate the flag on the surface and at both
-positive and negative y, including a small nonzero rational.
+positive and negative y. The parameter-family tests separately exercise a
+nonzero rational ε as small as 10⁻¹².
 
 ## Horizontal endpoint equations
 

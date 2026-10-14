@@ -1,0 +1,5 @@
+schema	subriemannian-aici-v1
+artifact	/workspace/scratch/98691e9021ef/reproduction-fresh-head/artifacts/subriemannian_app/subriemannian.so
+sha256	610bbcb4626a6ec1eeda3c7d35fa08343c5a3ce222d0f1dae845554296d7048c
+evidence	compiled Idriç/Chez executable and independent formula oracle
+status	PASS

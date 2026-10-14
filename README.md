@@ -18,6 +18,7 @@ runtime. Definitions, numerical algorithms, and presentation are separate.
 - [Offline horizontal-loop explorer](figures/heisenberg-loop.html)
 - [Inspected sources and exact claim locations](sources/ledger.md)
 - [Reproducible build, tests, figures and receipts](_/reproduce.md)
+- [Captured fresh-checkout FP/Kitchen/AICI receipts](evidence/host-2026-10-14/README.md)
 
 The explorer's two views use the same path samples emitted by the compiled core.
 Size and orientation controls apply the derived transformations to those samples.
